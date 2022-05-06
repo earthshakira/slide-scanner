@@ -1,0 +1,200 @@
+<html>
+<head>
+    <style>
+        .row {
+            margin: 0;
+            padding: 0;
+            height: 31px;
+        }
+
+        .region {
+            height: 25px;
+            width: 25px;
+            display: inline-block;
+            margin: 0;
+            padding: 0;
+            border: 3px solid lightgray;
+        }
+
+        .visited {
+            background-color: lightgrey;
+        }
+
+        .focused {
+            background-color: lightgrey;
+            border: 3px dotted red;
+        }
+
+        .captured {
+            background-color: lightgrey;
+            border: 3px solid red;
+        }
+
+        .active {
+            background-color: yellow;
+        }
+    </style>
+</head>
+<body style="text-align: center">
+<h1> Slide Scanner </h1>
+<div style='vertical-align: middle'>
+    <div style="display: inline-block; text-align: left">
+        <div class='region visited'></div>
+        visited </br>
+        <div class='region focused'></div>
+        focused </br>
+    </div>
+    <div style="display: inline-block; text-align: left">
+        <div class='region captured'></div>
+        captured </br>
+        <div class='region active'></div>
+        active </br>
+    </div>
+</div>
+<br>
+<div id="area">
+    loading...
+</div>
+<script>
+    function initSlideScan() {
+        console.log('Slide Scan Started');
+        const STATE = {
+            VISITED: 0,
+            FOCUSED: 1,
+            CAPTURED: 2,
+        }
+
+        const KEY = {
+            LEFT: 0,
+            UP: 1,
+            RIGHT: 2,
+            DOWN: 3
+        }
+        let grid = [];
+        let active = null;
+        let config = null;
+
+        const EVENTS = {
+            INIT: 0,
+            VISIT: 1,
+            IMAGE: 2,
+        }
+        let serverReady = false;
+        let prev = null;
+
+        function createMessage(type, data) {
+            return JSON.stringify({type, data});
+        }
+
+        function performMove(move, socket) {
+            prev = {x: active.x, y: active.y}
+            if (move === KEY.LEFT) {
+                if (active.y > 0)
+                    active.y -= 1;
+            } else if (move === KEY.RIGHT) {
+                if (active.y < config.width)
+                    active.y += 1;
+            } else if (move === KEY.UP) {
+                if (active.x > 0)
+                    active.x -= 1;
+            } else if (move === KEY.DOWN) {
+                if (active.x < config.width)
+                    active.x += 1;
+            }
+            updateActive(active)
+            socket.send(createMessage(EVENTS.VISIT, active))
+        }
+
+        let exampleSocket = new WebSocket("ws://localhost:8765");
+
+        exampleSocket.onopen = function (event) {
+            serverReady = true;
+            exampleSocket.send(createMessage(EVENTS.INIT, {}));
+        };
+
+        function getRegionClass(value) {
+            if (value === STATE.VISITED) {
+                return 'visited';
+            } else if (value === STATE.FOCUSED) {
+                return 'focused';
+            } else if (value === STATE.CAPTURED) {
+                return 'captured';
+            }
+            return '';
+        }
+
+        function createGridHTML(grid) {
+            const el = document.getElementById('area');
+            el.innerHTML = "";
+            let i = 0, j = 0;
+            for (let row of grid) {
+                const rowDiv = document.createElement("div");
+                rowDiv.className = 'row';
+                j = 0;
+                for (let val of row) {
+                    let region = document.createElement("div");
+                    region.className = 'region';
+                    let additionalClass = getRegionClass(val)
+                    if (additionalClass)
+                        region.classList.add(additionalClass);
+                    region.id = `grid_${i}_${j}`;
+                    rowDiv.appendChild(region);
+                    j += 1;
+                }
+                el.appendChild(rowDiv)
+                i += 1;
+            }
+        }
+
+        function updateActive(active) {
+            if (prev != null) {
+                console.log('pre', prev)
+                let cell = document.getElementById(`grid_${prev.x}_${prev.y}`)
+                cell.classList.remove("active")
+            }
+            let cell = document.getElementById(`grid_${active.x}_${active.y}`)
+            cell.classList.add("active")
+        }
+
+        function setRegionState(x, y, className) {
+            let region = document.getElementById(`grid_${x}_${y}`)
+            region.classList.add(className)
+        }
+
+        exampleSocket.onmessage = function (event) {
+            event = JSON.parse(event.data)
+            const {type: eType, data} = event
+            if (eType === EVENTS.INIT) {
+                console.log("creating grid");
+                createGridHTML(data.grid);
+                active = {x: data.x, y: data.y}
+                updateActive(active);
+
+                config = data.config;
+            } else if (eType === EVENTS.VISIT) {
+                console.log(data.x, data.y, data.state)
+                if (data.state === STATE.VISITED) {
+                    setRegionState(data.x, data.y, 'visited')
+                    updateActive(data);
+                } else if (data.state === STATE.FOCUSED) {
+                    setRegionState(data.x, data.y, 'focused')
+                } else if (data.state === STATE.CAPTURED) {
+                    setRegionState(data.x, data.y, 'captured')
+                }
+
+            }
+
+            document.body.onkeydown = function (event) {
+                let keyCode = window.event ? window.event : event;
+                keyCode = keyCode.keyCode - 37;
+                if (keyCode >= 0 && keyCode <= 3) performMove(keyCode, exampleSocket);
+            }
+        }
+
+    }
+
+    document.body.onload = initSlideScan
+
+</script>
+</body>
+</html>
