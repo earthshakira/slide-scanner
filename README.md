@@ -8,6 +8,7 @@
     docker build ./  -t wss-slides 
 ```
 This will create an image with the name `wss-slides`
+
 2. Run the docker image
 
 ```shell
@@ -16,8 +17,8 @@ This will create an image with the name `wss-slides`
 This will run the image with the name `wss-slides`
 
 3. Go to your browser and visit http://localhost:8000 to see the website
-4. 
-5. To reset the application run
+
+4. To reset the application run
 ```shell
     docker stop wss-slides
     docker rm wss-slides
